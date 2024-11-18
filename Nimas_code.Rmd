@@ -569,3 +569,59 @@ combined_plants_list[[1]]
 
 ```
 
+```{r}
+
+data<-combined_plants_list[[5]]
+# Réaliser un ANOVA pour tester l'effet des conditions et du temps
+anova_result <- aov(croissance_cumulee ~ condition * ts *cote, data = data)
+
+# Résumé des résultats de l'ANOVA
+summary(anova_result)
+
+```
+
+```{r}
+
+# Créer une liste vide pour stocker les graphiques
+plots_list_compare <- list()
+
+# Boucle pour traiter les paires successives de plantes de 1 à 15
+for (i in 1:15) {
+  # Extraire les données pour la plante i et i+1
+  data1 <- Plant_long_croissance[[i]]
+  data2 <- Plant_long_croissance[[i + 1]]
+  
+  # Fusionner les deux ensembles de données
+  merged_data <- rbind(data1, data2)
+  
+  # Ajouter une colonne pour identifier la paire de plantes
+ # merged_data$plante_pair <- paste("Plante", i, "vs Plante", i + 1)
+  
+  # Représenter la croissance cumulée relative en fonction du temps pour les deux plantes
+  p <- ggplot(merged_data, aes(x = ts, y = croissance_cumulee, color = condition)) +
+    geom_line(size = 1.5) +  # Tracer une ligne pour chaque plante avec une taille de ligne ajustée
+    geom_point(aes(color = condition), size = 3, alpha = 0.7) +  # Points colorés selon la condition
+    labs(
+      title = paste("Comparaison de la croissance cumulée entre la Plante", i, "et la Plante", i + 1),
+      x = "Date",
+      y = "Croissance cumulée"
+    ) +
+    scale_x_date(
+      limits = as.Date(c("2024-10-28", "2024-11-10")),  # Plage de dates
+      date_labels = "%b %d",   # Format de la date pour l'affichage
+      date_breaks = "2 days"   # Espacement des labels sur l'axe des X
+    ) +
+    scale_color_manual(values = c("ww" = "blue", "ws" = "red")) +  # Couleurs personnalisées pour les conditions
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotation des dates sur l'axe X
+  
+  # Ajouter le graphique à la liste des graphiques
+  plots_list_compare[[i]] <- p
+}
+
+# Afficher le graphique pour la première paire, par exemple
+print(plots_list_compare[[2]])
+
+
+```
+
