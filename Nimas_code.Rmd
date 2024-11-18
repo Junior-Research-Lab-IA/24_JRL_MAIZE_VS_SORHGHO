@@ -1,0 +1,571 @@
+---
+title: "Projets Ateliers"
+author: "Nimas"
+date: "2024-11-10"
+output:
+  html_document:
+    toc: true                # Ajouter un sommaire interactif
+    toc_depth: 3             # Profondeur du sommaire (sections, sous-sections, etc.)
+    number_sections: true    # Numéroter les sections
+    highlight: tango         # Style de surlignage du code pour une meilleure lisibilité
+    theme: united            # Thème visuel pour le document HTML
+  pdf_document:
+    toc: true                # Ajouter un sommaire pour le PDF
+    toc_depth: 3             # Profondeur du sommaire pour le PDF
+    number_sections: true    # Numéroter les sections dans le PDF
+    latex_engine: xelatex    # Utiliser xelatex pour une meilleure compatibilité avec les polices
+    keep_tex: true           # Conserver le fichier .tex généré (utile pour le débogage)
+    extra_dependencies:
+      - geometry: margin=1in # Définir des marges d'un pouce
+      
+      
+      - fontspec
+      - xunicode
+      - xltxtra
+fontsize: 12pt               # Taille de police par défaut
+mainfont: "Times New Roman"  # Police principale
+geometry: "margin=1in"       # Définir les marges du document
+header-includes:
+  - \usepackage{setspace}    # Ajouter un espacement entre les lignes
+  - \onehalfspacing          # Espacement de 1.5 entre les lignes
+  - \usepackage{graphicx}    # Pour insérer des images
+  - \usepackage{float}       # Contrôle du positionnement des figures et tableaux
+  - \usepackage{caption}     # Personnaliser les légendes des figures et tableaux
+  - \captionsetup{labelfont=bf} # Mettre en gras le label des légendes
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+### Chargement des bibliothéques 
+
+```{r,  echo=FALSE, include=FALSE, warning=FALSE}
+# Charger les bibliothèques nécessaires
+library(lubridate)
+library(gridExtra)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(RColorBrewer)
+
+library(tidyverse)  # Pour dplyr, tidyr, etc.
+library(purrr)      # Pour la fonction map()
+
+
+
+```
+
+### Lecture du fichier 
+
+```{r,  echo=FALSE, warning=FALSE}
+
+setwd("C:/Users/Abdoulaye Diop/Desktop/Projets_atelier/Projets_Ateliers")
+data <- readxl::read_excel("Copie de Data.xlsx",  col_names = TRUE,)
+# Conversion de la colonne `leaf` en numérique
+data$leaf <- as.numeric(data$leaf)
+data<-as.data.frame(data)
+head(data)
+#colnames(data)
+```
+
+### Visualiser les valeurs manquantes 
+
+```{r,echo=FALSE}
+# Supposons que votre dataframe s'appelle 'data'
+
+# Nombre de lignes
+n_lignes <- nrow(data)
+
+# Nombre de colonnes
+n_colonnes <- ncol(data)
+
+# Nombre de valeurs manquantes par colonne
+n_manquantes <- colSums(is.na(data))
+
+
+n_elements <- n_lignes * n_colonnes
+
+# Créer un dataframe pour les valeurs à afficher dans l'histogramme
+summary_data <- data.frame(
+  Category = c("Nombre de lignes", "Nombre de colonnes", "Valeurs manquantes", "Nombre d'éléments"),
+  Value = c(n_lignes, n_colonnes, sum(n_manquantes), n_elements)
+)
+
+# Affichage de l'histogramme
+library(ggplot2)
+
+ggplot(summary_data, aes(x = Category, y = Value, fill = Category)) +
+  geom_bar(stat = "identity", show.legend = FALSE, width = 0.6) +  # Largeur de barre ajustée
+  labs(
+    title = "Résumé du Dataset : Lignes, Colonnes et Valeurs Manquantes",
+    x = "Catégorie", 
+    y = "Valeur",
+    subtitle = paste("Total éléments = ", n_elements)
+  ) +
+  scale_fill_manual(values = c("#FF7F0E", "#2CA02C", "#1F77B4", "#D62728")) +  # Palette de couleurs personnalisée
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 12),  # Inclinaison des labels de l'axe X
+    axis.title = element_text(size = 14),
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12, face = "italic"),
+    panel.grid.major = element_line(color = "gray90", size = 0.5),
+    panel.grid.minor = element_blank()
+  )  # Design amélioré avec une grille légère
+
+```
+
+
+
+## Gestion des valeurs manquantes et catégorisation
+
+Dans le jeu de données, plusieurs valeurs manquantes sont observées et se regroupent en deux catégories distinctes :
+
+1. **Stagnation de la croissance** : Cette catégorie correspond à des valeurs manquantes où une stagnation de la croissance a été observée, ce qui signifie que la croissance des feuilles est arrêtée à un moment donné, mais les données sont présentes pour la période. Cela peut se manifester par une absence de variation dans les valeurs des feuilles, mais ces valeurs sont enregistrées pour un certain jour.
+
+2. **Absence de données pour une date donnée** : Cette catégorie fait référence aux valeurs manquantes qui apparaissent lorsque les feuilles ne sont pas présentes pour une certaine date. Par exemple, si aucune donnée n'a été enregistrée pour une date spécifique, cela pourrait signifier que les feuilles n'étaient tout simplement pas présentes à ce moment-là, entraînant une absence de mesure.
+
+Nous allons donc distinguer ces deux groupes afin de mieux comprendre et traiter les données manquantes dans notre analyse.
+
+
+
+## Réorganisation des données
+
+
+Le jeu de données contient plusieurs variables redondantes ainsi que des variables dont la provenance n'est pas clairement définie. Pour commencer, je vais effectuer une analyse descriptive sur une catégorie de variables. Ensuite, le principe sera appliqué de manière similaire pour modéliser la surface. Bien que la surface des feuilles puisse fournir plus d'informations sur la croissance, il y a une limitation dans les données collectées concernant la surface.
+
+Ainsi, en première étape, je décide de me concentrer sur la modélisation de la longueur des feuilles, mesurée comme la distance depuis la base de la feuille (Length from the base). Cette approche initiale permettra de mieux comprendre les relations entre les différentes variables disponibles avant de s'attaquer à des modèles plus complexes.
+
+
+##Fonction me permettant de faire la réorganidations des donnnées 
+
+```{r, echo=FALSE}
+
+
+# Fonction pour traiter chaque jeu de données avec une date et sa colonne de longueur spécifiques
+process_data <- function(data, date_col, length_col) {
+  data %>%
+    select(species, condition, rhizotron, plant, leaf, all_of(date_col), all_of(length_col)) %>%
+    pivot_wider(names_from = leaf, values_from = all_of(length_col), 
+                values_fill = list(`Lenght from the base...7` = 0)) %>%
+    arrange(all_of(date_col)) %>%
+    rename(ts = all_of(date_col)) %>%  # Renommer la colonne de date en ts
+    # Renommer la colonne `plant` en `cote` et affecter la valeur "L" ou "R" selon le cas
+    mutate(plant = ifelse(startsWith(plant, "L"), "L", "R")) %>%  # Remplacer la colonne plant par L ou R
+    rename(cote = plant) %>%  # Renommer la colonne plant en cote
+    filter(!is.na(ts)) %>%
+    # Supprimer les deux dernières colonnes (comme dans votre logique)
+    select(-tail(names(.), 1)) %>%
+    # Renommer les colonnes Feuille 1 à Feuille 7 explicitement
+    setNames(c("species", "condition", "rhizotron", "cote", "ts", 
+               paste("Feuille", 1:8))) %>%
+    # Convertir `ts` en Date si nécessaire (si ce n'est pas déjà le cas)
+    mutate(ts = as.Date(ts, format = "%Y-%m-%d"))  # Adapter le format si nécessaire
+}
+
+# Traiter chaque jeu de données pour différentes dates
+data_1 <- process_data(data, "date...6", "Lenght from the base...7")
+data_2 <- process_data(data, "date...13", "Lenght from the base...14")
+data_3 <- process_data(data, "date...20", "Lenght from the base...21")
+data_4 <- process_data(data, "date...27", "Lenght from the base...28")
+data_5 <- process_data(data, "date...34", "Lenght from the base...35")
+data_6 <- process_data(data, "date...41", "Lenght from the base...42")
+data_7<-process_data(data, "date...48", "Lenght from the base...49")
+
+# Conversion des colonnes Feuille 1 à Feuille 7 en double
+data_4 <- data_4 %>%
+  mutate(across(`Feuille 1`:`Feuille 7`, as.double))
+
+
+data_6 <- data_6 %>%
+  mutate(across(`Feuille 1`:`Feuille 7`, as.double))
+
+
+# Afficher un exemple de traitement
+all_data <- bind_rows(data_1, data_2, data_3, data_4, data_5, data_6, data_7)
+
+data_raw<-all_data
+#head(data_raw)
+#colnames(data_raw)
+```
+
+
+Dans le cadre de notre analyse, nous avons procédé à une réorganisation des variables pour nous concentrer sur celles qui sont les plus pertinentes pour la modélisation. Les variables sélectionnées sont les suivantes :
+
+\begin{itemize}
+    \item \textbf{species} : espèce
+    \item \textbf{condition} : condition de croissance
+    \item \textbf{rhizotron} : numéro du rhizotron
+    \item \textbf{cote} : côté (gauche ou droit)
+    \item \textbf{ts} : timestamp (temps)
+    \item \textbf{Feuille 1} : mesure pour la feuille 1
+    \item \textbf{Feuille 2} : mesure pour la feuille 2
+    \item \textbf{Feuille 3} : mesure pour la feuille 3
+    \item \textbf{Feuille 4} : mesure pour la feuille 4
+    \item \textbf{Feuille 5} : mesure pour la feuille 5
+    \item \textbf{Feuille 6} : mesure pour la feuille 6
+    \item \textbf{Feuille 7} : mesure pour la feuille 7
+\end{itemize}
+
+### Solution pour la catégorie une
+
+
+Il s'agit de remplacer toutes les valeurs manquantes par `0`, puis de revenir pour corriger la deuxième catégorie.
+
+
+```{r, include=FALSE,echo=FALSE}
+replace_na_with_zero <- function(data) {
+  # Appliquer le remplacement seulement aux colonnes numériques
+  data[] <- lapply(data, function(col) {
+    if (is.numeric(col)) {
+      # Remplacer les NA par 0 uniquement dans les colonnes numériques
+      col[is.na(col)] <- 0
+    }
+    return(col)
+  })
+  
+  return(data)
+}
+
+all_data<-replace_na_with_zero(data_raw)
+head(all_data)
+```
+
+
+
+##  Modélisations de chaque plante 
+
+
+```{r, echo=FALSE}
+library(dplyr)
+
+# Fonction pour filtrer et concaténer les données pour chaque rhizotron
+combine_rhizotron <- function(data_list, rhizotron_number) {
+  bind_rows(data_list) %>%                    # Concaténer tous les jeux de données
+    filter(rhizotron == rhizotron_number)                       # Trier par `ts`
+}
+
+
+# Générer automatiquement les datasets `plant_1` à `plant_16`
+for (i in 1:16) {
+  assign(paste0("plant_", i), combine_rhizotron(all_data, i))
+}
+
+# Exemple d'affichage pour vérifier
+head(plant_1)
+head(plant_2)
+
+
+```
+
+
+### Deuxième solution pour les valeurs manquantes
+
+On se place sur un `0`, supposons que l'indice est `k`. On examine les indices de `k+1` jusqu'à `ncol(data)` pour voir s'il y a un nombre différent de `0`. Si oui, on copie les observations de l'indice `i-2` pour les valeurs des indices de `1` jusqu'à `k`.
+
+
+
+```{r, include=F, echo=FALSE}
+replace_zeros_with_previous_non_zero <- function(data, numeric_columns) {
+  # Parcours des lignes du dataset
+  for (i in 3:nrow(data)) {  # On commence à partir de la 3ème ligne pour éviter l'indexation i-2 pour la première ligne
+    for (col in numeric_columns) {  # On boucle uniquement sur les colonnes numériques
+      if (data[i, col] == 0) {  # Si la valeur est 0
+        # Chercher la première valeur non nulle dans les colonnes suivantes
+        k <- NA
+        for (j in which(numeric_columns == col):length(numeric_columns)) {
+          if (data[i, numeric_columns[j]] != 0) {  # Si on trouve une valeur non nulle
+            k <- j
+            break
+          }
+        }
+        
+        # Si on trouve une colonne suivante avec une valeur non nulle
+        if (!is.na(k)) {
+          # Remplacer la valeur 0 par la valeur dans la ligne i-2 pour cette colonne
+          # Accès correct à la colonne avec numeric_columns[col] (pas d'index hors de portée)
+          data[i, col] <- data[i-2, col]
+        }
+      }
+    }
+  }
+  return(data)
+}
+
+```
+
+##Ona mis tous les plantes dans une liste de tailles 16
+
+
+```{r,  echo=F,include=F}
+# Exemple : Liste des plantes
+plants_list <- list(plant_1, plant_2, plant_3, plant_4, plant_5, plant_6, 
+                    plant_7, plant_8, plant_9, plant_10, plant_11, plant_12,
+                    plant_13, plant_14, plant_15, plant_16)
+
+# Fonction pour appliquer à chaque dataset de plante
+replace_zeros_for_all_plants <- function(plants_list, numeric_columns) {
+  # Appliquer la fonction à chaque dataset de plante
+  plants_list <- lapply(plants_list, function(plant_data) {
+    replace_zeros_with_previous_non_zero(plant_data, numeric_columns)
+  })
+  return(plants_list)
+}
+
+# Appliquer la fonction à toutes les plantes
+numeric_columns <- c("Feuille 1", "Feuille 2", "Feuille 3", "Feuille 4", "Feuille 5", "Feuille 6", "Feuille 7")
+Plant <- replace_zeros_for_all_plants(plants_list, numeric_columns)
+
+```
+
+
+
+
+#### Boxplot pour chaque  en fonction du côté 
+
+
+```{r,echo=FALSE}
+
+# Initialiser une liste vide pour les graphiques
+plots_list <- list()
+
+# Boucle pour les 16 plantes
+for (i in 1:16) {
+  
+  # Récupérer les données de la plante spécifique dans la liste Plant
+  data <- Plant[[i]]
+  
+  # Réorganiser les données en format long
+  data_long <- data %>%
+    select(ts, species, condition, cote, starts_with("Feuille")) %>%
+    pivot_longer(cols = starts_with("Feuille"), names_to = "Feuille", values_to = "Value")
+  
+  # Mettre en forme les noms des feuilles pour les afficher de manière plus lisible
+  data_long$Feuille <- gsub("Feuille_", "Length from the base - Feuille ", data_long$Feuille)
+  
+  # Ajouter les graphiques dans la liste pour chaque plante
+  for (species_name in unique(data_long$species)) {
+    plot_species <- data_long %>%
+      filter(species == species_name) %>%
+      ggplot(aes(x = cote, y = Value, fill = cote)) +
+      geom_boxplot() +
+      facet_wrap(~ Feuille, scales = "free") +  # Crée un boxplot par feuille
+      labs(title = paste("Distribution des valeurs Length from the base des feuilles pour", species_name),
+           x = "Cote", 
+           y = "Valeur",
+           fill = "Cote") +  # Légende personnalisée pour la condition
+      theme_minimal() +
+      scale_fill_brewer(palette = "Set3")  # Palette de couleurs agréable pour le cote
+    
+    # Ajouter chaque graphique à la liste
+    plots_list[[i]] <- plot_species
+  }
+}
+
+# Exemple pour afficher le graphique de la première plante
+print(plots_list[[1]])  # Afficher le boxplot pour la première plante
+
+# Afficher les graphiques pour une plante (par exemple, pour la première plante)
+
+# Optionnel : afficher tous les graphiques dans une seule fenêtre
+# lapply(plots_list, print)
+for (i in 1:16){
+  print(plots_list[[i]])
+}
+
+```
+
+ 
+
+#### Hypothèse sur les différences observées dans les boxplots
+
+Bien qu'une différence entre les boxplots en fonction du côté (gauche vs droite) soit apparente, on remarque que la **Feuille 4** est beaucoup plus développée dans toutes les plantes. Cela pourrait indiquer une hypothèse sous-jacente qui mérite d'être explorée.
+
+Cette différence observée dans les boxplots peut suggérer que la variable `cote` (gauche vs droite) a un effet sur la croissance des feuilles. Cependant, pour confirmer cette hypothèse, il est nécessaire de réaliser des tests statistiques pour valider si cette différence est significative. Une analyse plus approfondie pourrait inclure un test ANOVA ou un autre test adapté afin de tester si les moyennes des différents groupes (`cote` = "L" et "R") diffèrent de manière significative.
+
+
+
+
+
+ 
+```{r , echo=FALSE, warning=FALSE}
+data<-Plant[[16]]
+
+# Réorganiser les données en format long
+data_long <- data %>%
+  select(ts, species, condition, rhizotron, cote, starts_with("Feuille")) %>%
+  pivot_longer(cols = starts_with("Feuille"), names_to = "Feuille", values_to = "Value")
+
+# Effectuer l'ANOVA pour chaque feuille en fonction du 'cote'
+anova_results <- data_long %>%
+  group_by(Feuille) %>%
+  summarise(
+    anova = list(aov(Value ~ cote, data = .))  # Calcul de l'ANOVA pour chaque feuille
+  )
+
+# Résumer les résultats ANOVA avec 'map()'
+anova_summary <- anova_results %>%
+  mutate(summary = map(anova, summary))  # Appliquer la fonction summary() sur chaque résultat d'ANOVA
+
+# Afficher le résumé des résultats ANOVA
+anova_summary %>%
+  select(Feuille, summary)  # Sélectionner la colonne de résumé
+anova_summary$summary
+```
+
+
+
+L'hypothèse de départ n'est pas valide pour toutes les plantes, car après avoir réalisé les tests ANOVA, nous avons obtenu des valeurs p supérieures 0.05, ce qui accepte l'hypothèse nulle, affirmant que les deux groupes sont les même. Cependant, pour les plantes 11, 15 et 16, une différence statistique significative a été observée.
+
+
+
+## Transformations des données
+
+### Création d'une nouvelle variable : `long`
+
+Dans cette section, nous allons créer une nouvelle variable appelée `long`, qui représente la somme des longueurs de toutes les feuilles mesurées pour chaque observation. Cette variable peut être particulièrement utile pour nos analyses, car elle synthétise l'information relative à la taille totale des feuilles.
+
+Après avoir créé cette variable, celle-ci sera utile pour décrire la longueur totale des feuilles. Nous pourrons donc nous contenter de cette variable et laisser de côté les longueurs des feuilles individuelles (Feuille 1 à Feuille 7).
+
+
+
+```{r echo=F, message=FALSE, warning=FALSE}
+Plant_long <- list()
+
+
+# Modifier les données pour chaque plante
+for (i in 1:16) {
+  data <- Plant[[i]]
+  
+  # Calculer la somme des longueurs des feuilles (colonnes 6 à 12)
+  data$long <- rowSums(data[, 6:12])
+
+  
+  # Sélectionner les colonnes nécessaires
+  data <- data %>%
+    select(ts, species, condition, rhizotron, cote, long)
+  
+  # Stocker le dataframe modifié dans la liste
+  Plant_long[[i]] <- data
+}
+
+head(Plant_long[[1]])
+```
+
+```{r, echo=FALSE}
+
+# Fusionner les données de toutes les plantes dans un seul dataframe
+merged_data <- do.call(rbind, Plant_long)
+
+# Représenter long en fonction du temps (ts) avec ggplot2
+ggplot(merged_data, aes(x = ts, y = long, color = as.factor(species))) +
+  geom_line(size = 1) +  # Tracer une ligne plus épaisse pour chaque espèce
+  geom_point(size = 3, alpha = 0.7) +  # Ajouter des points plus grands et plus transparents
+  labs(
+    title = "Évolution de la longueur totale des feuilles en fonction du temps",
+    x = "Temps (Date)",
+    y = "Longueur totale des feuilles (cm)",
+    color = "Espèce"
+  ) +
+  scale_color_brewer(palette = "Set1") +  # Palette de couleurs distinctes pour chaque espèce
+  scale_x_date(
+    date_labels = "%b %d",  # Format des dates
+    date_breaks = "3 days",  # Espacement des labels (chaque 3 jours)
+    limits = as.Date(c("2024-10-28", "2024-11-10"))  # Plage de dates spécifique
+  ) +
+  theme_light() +  # Thème clair pour un look plus moderne
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),  # Centrer et styliser le titre
+    axis.title = element_text(size = 14),  # Titre des axes
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 12),  # Rotation et taille des labels sur l'axe X
+    axis.text.y = element_text(size = 12)  # Taille des labels sur l'axe Y
+  )
+
+```
+
+
+
+Dans cette analyse, nous allons modéliser la croissance des plantes  en estimant la **croissance **. Ensuite, nous représenterons ces données graphiquement.
+
+
+
+
+
+```{r, echo=FALSE}
+
+Plant_long_croissance <- list()
+
+for (i in 1:16) {
+  data <- Plant_long[[i]]
+  
+  # Calculer la croissance relative et remplacer le NA par 0
+  data <- data %>%
+    mutate(
+      croissance = c(0, diff(long)) # Remplacer NA par 0
+    )
+  
+  data <- data %>%
+  mutate(
+    croissance_cumulee= cumsum(croissance)  # Croissance cumulée relative
+  )
+
+  # Ajouter les données modifiées à la liste
+  Plant_long_croissance[[i]] <- data
+}
+
+
+head(Plant_long_croissance[[1]])
+# Afficher les premières lignes du datafra
+```
+
+#### Visualiser la croisance cumulée pour la premiére plante
+
+```{r, echo=FALSE}
+data<-Plant_long_croissance[[1]]
+ggplot(data, aes(x = ts, y = croissance_cumulee)) +
+  geom_line(color = "blue", size = 1.5) +  # Ligne bleue, taille de ligne ajustée
+  geom_point(aes(color = croissance_cumulee), size = 3, alpha = 0.7) +  # Points colorés selon la croissance, taille ajustée
+  labs(title = "Croissance cumulée  de la première plante en fonction du temps", 
+       x = "Date", 
+       y = "Croissance cumulée ") +
+  scale_x_date(
+    limits = as.Date(c("2024-10-28", "2024-11-10")),  # Plage de dates
+    date_labels = "%b %d",   # Format de la date pour l'affichage
+    date_breaks = "2 days"   # Espacement des labels sur l'axe des X
+  ) +
+  scale_color_viridis_c(option = "C") +  # Utilisation de la palette Viridis pour la couleur des points
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+
+
+
+
+```{r,echo=FALSE}
+
+## Combined cest une liste qui va me permettre de faire la  comparaison d'une plante sous deux conditions 
+
+# Créer une liste vide pour stocker les nouveaux dataframes concaténés
+combined_plants_list <- list()
+
+# Concaténer deux à deux les éléments de la liste Plant
+for (i in seq(1, length(Plant_long_croissance), by = 2)) {
+  # Vérifier si l'élément suivant existe (pour éviter un problème d'indice)
+  if (i + 1 <= length(Plant)) {
+    # Concaténer les deux éléments consécutifs
+    combined_data <- bind_rows(Plant_long_croissance[[i]], Plant_long_croissance[[i + 1]])
+    # Ajouter le dataframe concaténé dans la nouvelle liste
+    combined_plants_list[[length(combined_plants_list) + 1]] <- combined_data
+  }
+}
+
+# Afficher les nouveaux datasets
+combined_plants_list[[1]]
+
+```
+
